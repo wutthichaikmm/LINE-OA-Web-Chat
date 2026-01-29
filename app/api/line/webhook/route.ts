@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
           text: event.message.text,
           timestamp: new Date().toISOString(),
         };
-        saveMessage(lineMessage, userId);
+        await saveMessage(lineMessage, userId);
       }
     }
 

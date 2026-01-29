@@ -1,3 +1,4 @@
+import { kv } from '@vercel/kv';
 import fs from 'fs';
 import path from 'path';
 
@@ -15,27 +16,49 @@ export interface StorageData {
   lastUserId?: string;
 }
 
-function getStorage(): StorageData {
-  if (!fs.existsSync(STORAGE_PATH)) {
-    return { messages: [] };
+const isVercel = process.env.VERCEL === '1' || !!process.env.KV_URL;
+
+export async function getMessages(): Promise<Message[]> {
+  if (isVercel) {
+    const messages = await kv.get<Message[]>('chat_messages');
+    return messages || [];
+  } else {
+    if (!fs.existsSync(STORAGE_PATH)) return [];
+    const data = fs.readFileSync(STORAGE_PATH, 'utf-8');
+    const storage = JSON.parse(data) as StorageData;
+    return storage.messages || [];
   }
-  const data = fs.readFileSync(STORAGE_PATH, 'utf-8');
-  return JSON.parse(data);
 }
 
-export function getMessages(): Message[] {
-  return getStorage().messages;
-}
-
-export function getLastUserId(): string | undefined {
-  return getStorage().lastUserId;
-}
-
-export function saveMessage(message: Message, userId?: string) {
-  const storage = getStorage();
-  storage.messages.push(message);
-  if (userId) {
-    storage.lastUserId = userId;
+export async function getLastUserId(): Promise<string | undefined> {
+  if (isVercel) {
+    return (await kv.get<string>('last_user_id')) || undefined;
+  } else {
+    if (!fs.existsSync(STORAGE_PATH)) return undefined;
+    const data = fs.readFileSync(STORAGE_PATH, 'utf-8');
+    const storage = JSON.parse(data) as StorageData;
+    return storage.lastUserId;
   }
-  fs.writeFileSync(STORAGE_PATH, JSON.stringify(storage, null, 2));
+}
+
+export async function saveMessage(message: Message, userId?: string) {
+  if (isVercel) {
+    const messages = await getMessages();
+    messages.push(message);
+    await kv.set('chat_messages', messages);
+    if (userId) {
+      await kv.set('last_user_id', userId);
+    }
+  } else {
+    let storage: StorageData = { messages: [] };
+    if (fs.existsSync(STORAGE_PATH)) {
+      const data = fs.readFileSync(STORAGE_PATH, 'utf-8');
+      storage = JSON.parse(data);
+    }
+    storage.messages.push(message);
+    if (userId) {
+      storage.lastUserId = userId;
+    }
+    fs.writeFileSync(STORAGE_PATH, JSON.stringify(storage, null, 2));
+  }
 }

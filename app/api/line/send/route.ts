@@ -11,7 +11,7 @@ const client = new MessagingApiClient({
 export async function POST(req: NextRequest) {
   try {
     const { text } = await req.json();
-    const userId = getLastUserId();
+    const userId = await getLastUserId();
 
     if (!userId) {
       return NextResponse.json({ error: 'No LINE user to send to. Wait for a message from LINE first.' }, { status: 400 });
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       text: text,
       timestamp: new Date().toISOString(),
     };
-    saveMessage(userMessage);
+    await saveMessage(userMessage);
 
     return NextResponse.json({ status: 'ok' });
   } catch (error) {
